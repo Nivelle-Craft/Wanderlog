@@ -20,34 +20,25 @@ public final class WanderlogJournal {
     public static void open(ServerPlayer player) {
         ExplorerData data = ExplorerSavedData.get(player.server).get(player.getUUID());
         player.openMenu(new SimpleMenuProvider((id, inventory, ignored) -> {
-            SimpleContainer container = new SimpleContainer(54);
-            ChestMenu menu = ChestMenu.sixRows(id, inventory, container);
-
-            item(container, 4, Items.COMPASS, "Wanderlog Journal",
-                    "Explorer Level " + data.getLevel());
-            item(container, 11, Items.EXPERIENCE_BOTTLE, "Explorer XP",
-                    data.getXp() + " / " + data.xpRequiredForNextLevel());
-            item(container, 13, Items.MAP, "Discovered Biomes",
-                    data.getDiscoveredBiomeCount() + " unique biomes");
-
-            int nextMilestone = nextMilestone(data.getDiscoveredBiomeCount());
-            item(container, 15, Items.GOLD_INGOT, "Next Milestone",
-                    nextMilestone < 0 ? "All current milestones completed" : data.getDiscoveredBiomeCount() + " / " + nextMilestone + " biomes");
+            SimpleContainer c = new SimpleContainer(54);
+            ChestMenu menu = ChestMenu.sixRows(id, inventory, c);
+            item(c, 4, Items.COMPASS, "Wanderlog Journal", "Explorer Level " + data.getLevel());
+            item(c, 10, Items.EXPERIENCE_BOTTLE, "Explorer XP", data.getXp() + " / " + data.xpRequiredForNextLevel());
+            item(c, 12, Items.GRASS_BLOCK, "Overworld", data.getOverworldBiomeCount() + " biomes discovered");
+            item(c, 13, Items.NETHERRACK, "Nether", data.getNetherBiomeCount() + " biomes discovered");
+            item(c, 14, Items.END_STONE, "The End", data.getEndBiomeCount() + " biomes discovered");
+            int next = nextMilestone(data.getDiscoveredBiomeCount());
+            item(c, 16, Items.GOLD_INGOT, "Next Milestone", next < 0 ? "All milestones completed" : data.getDiscoveredBiomeCount() + " / " + next + " biomes");
 
             List<String> biomes = new ArrayList<>(data.getDiscoveredBiomes());
             biomes.sort(Comparator.naturalOrder());
             int slot = 27;
             for (String biome : biomes) {
                 if (slot >= 45) break;
-                item(container, slot++, Items.FILLED_MAP, pretty(biome), biome);
+                item(c, slot++, Items.FILLED_MAP, pretty(biome), biome);
             }
-
-            if (biomes.isEmpty()) {
-                item(container, 31, Items.PAPER, "No discoveries yet", "Go explore the world!");
-            } else if (biomes.size() > 18) {
-                item(container, 49, Items.BOOK, "+" + (biomes.size() - 18) + " more biomes",
-                        "More journal pages are coming soon");
-            }
+            if (biomes.isEmpty()) item(c, 31, Items.PAPER, "No discoveries yet", "Go explore the world!");
+            if (biomes.size() > 18) item(c, 49, Items.WRITABLE_BOOK, "+" + (biomes.size() - 18) + " more discoveries", "Journal pagination is the next page upgrade");
             return menu;
         }, Component.literal("Wanderlog Journal")));
     }
@@ -70,10 +61,10 @@ public final class WanderlogJournal {
         return out.toString();
     }
 
-    private static void item(SimpleContainer container, int slot, net.minecraft.world.item.Item type, String name, String description) {
+    private static void item(SimpleContainer c, int slot, net.minecraft.world.item.Item type, String name, String description) {
         ItemStack stack = new ItemStack(type);
         stack.setHoverName(Component.literal(name));
         stack.getOrCreateTag().putString("WanderlogDescription", description);
-        container.setItem(slot, stack);
+        c.setItem(slot, stack);
     }
 }
