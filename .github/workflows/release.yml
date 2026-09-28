@@ -2,14 +2,11 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Release tag, e.g. v0.1.0'
-        required: true
-        default: 'v0.1.0'
 
 permissions:
   contents: write
@@ -36,30 +33,39 @@ jobs:
       - name: Build Wanderlog
         run: ./gradlew clean build
 
-      - name: Resolve release tag
-        id: version
+      - name: Prepare JAR
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
-        shell: bash
-        run: |
-          shopt -s nullglob
-          jars=(build/libs/*.jar)
-          if [ ${#jars[@]} -eq 0 ]; then
-            echo 'No JAR produced by Gradle.' >&2
+          JAR=$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -n 1)
+          if [ -z "$JAR" ]; then
+            echo 'No Wanderlog JAR produced by Gradle.' >&2
             exit 1
           fi
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "${jars[@]}" --clobber
+          cp "$JAR" Wanderlog-latest.jar
+
+      - name: Publish Wanderlog Latest
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest Wanderlog-latest.jar --clobber
           else
-            gh release create "$TAG" "${jars[@]}" --title "Wanderlog $TAG" --generate-notes --target "$GITHUB_SHA"
+            gh release create latest Wanderlog-latest.jar --title 'Wanderlog Latest' --notes 'Latest successful development build of Wanderlog for Minecraft Forge 1.20.1.' --target "$GITHUB_SHA" --prerelease
+          fi
+
+      - name: Publish versioned release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          VERSIONED_JAR="Wanderlog-${TAG#v}.jar"
+          cp Wanderlog-latest.jar "$VERSIONED_JAR"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$VERSIONED_JAR" --clobber
+          else
+            gh release create "$TAG" "$VERSIONED_JAR" --title "Wanderlog $TAG" --generate-notes --target "$GITHUB_SHA"
           fi
