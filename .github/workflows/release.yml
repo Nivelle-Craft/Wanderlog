@@ -1,7 +1,7 @@
 name: Release
 
 # Publishes the downloadable JAR in the repository Releases section.
-on:
+'on':
   push:
     branches:
       - main
@@ -11,6 +11,10 @@ on:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -22,27 +26,28 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Java 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
 
-      - name: Make Gradle executable
-        run: chmod +x gradlew
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.1.1'
 
       - name: Build Wanderlog
-        run: ./gradlew clean build
+        run: gradle --no-daemon clean build
 
       - name: Prepare JAR
         shell: bash
         run: |
-          JAR=$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name '*-dev.jar' | head -n 1)
-          if [ -z "$JAR" ]; then
-            echo 'No Wanderlog JAR produced by Gradle.' >&2
+          mapfile -t JARS < <(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name '*-dev.jar')
+          if [ "${#JARS[@]}" -ne 1 ]; then
+            echo "Expected exactly one release JAR; found ${#JARS[@]}." >&2
             exit 1
           fi
-          cp "$JAR" Wanderlog-latest.jar
+          cp "${JARS[0]}" Wanderlog-latest.jar
 
       - name: Publish Wanderlog Latest
         if: github.ref == 'refs/heads/main'
@@ -50,14 +55,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          git tag --force latest "$GITHUB_SHA"
+          git push --force origin refs/tags/latest
           if gh release view latest >/dev/null 2>&1; then
             gh release upload latest Wanderlog-latest.jar --clobber
+            gh release edit latest --title 'Wanderlog Latest' --draft=false --prerelease=false --latest
           else
             gh release create latest Wanderlog-latest.jar \
               --title 'Wanderlog Latest' \
               --notes 'Latest successful development build of Wanderlog for Minecraft Forge 1.20.1. For stable servers, prefer a numbered release.' \
               --target "$GITHUB_SHA" \
-              --prerelease
+              --latest
           fi
 
       - name: Publish versioned release
