@@ -1,5 +1,6 @@
 name: Release
 
+# Publishes the downloadable JAR in the repository Releases section.
 on:
   push:
     branches:
